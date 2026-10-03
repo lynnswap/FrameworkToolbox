@@ -1,0 +1,52 @@
+name: Logging tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: logging-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  logging-tests:
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.5.app/Contents/Developer
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install xcsift
+        run: |
+          tool_directory="$RUNNER_TEMP/xcsift"
+          mkdir -p "$tool_directory"
+          archive="$tool_directory/xcsift-v1.5.1-macos-arm64.tar.gz"
+          curl -fsSL --retry 3 https://github.com/ldomaradzki/xcsift/releases/download/v1.5.1/xcsift-v1.5.1-macos-arm64.tar.gz -o "$archive"
+          echo "5ea6c5befad58f881896e4fd1479b3727db0f5d43829e77666b54b0508efa989  $archive" | shasum -a 256 -c -
+          tar -xzf "$archive" -C "$tool_directory"
+          echo "$tool_directory" >> "$GITHUB_PATH"
+
+      - name: Test logging macros and disabled interpolation
+        run: |
+          swift --version
+          swift test --filter 'OSToolboxMacroTests|LoggingControlTests|DisabledLoggingSkipsInterpolationTests|staticallyDisabledLoggersEvaluateNothing' 2>&1 | xcsift -f github-actions
+
+      - name: Check disabled logger imports
+        run: |
+          swift build 2>&1 | xcsift -f github-actions
+          undefined_symbols=$(nm -u .build/debug/OSToolboxNoFoundationClient)
+          if [[ "$undefined_symbols" == *"_\$s2os6LoggerV8disabledACvgZ"* ]]; then
+            echo '::error::The logging client imports Logger.disabled, which is absent on older runtimes.'
+            exit 1
+          fi

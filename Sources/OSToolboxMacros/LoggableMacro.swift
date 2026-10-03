@@ -117,6 +117,8 @@ private func buildConcreteMembers(
 ///   handle comes from the metatype-keyed process-wide cache.
 /// - otherwise — the live handle is cached in a `static let` and the accessor
 ///   only tests the switches.
+// Newer SDKs expose Logger.disabled without availability matching older
+// runtimes. Construct disabled loggers from the existing OSLog handle instead.
 private func buildHandleMembers(
     accessPrefix: String,
     enablement: EnablementConfiguration,
@@ -133,7 +135,7 @@ private func buildHandleMembers(
             "\(raw: accessPrefix)nonisolated static var _osLog: os.OSLog { .disabled }",
             """
             \(raw: availability)
-            \(raw: accessPrefix)nonisolated static var logger: os.Logger { .disabled }
+            \(raw: accessPrefix)nonisolated static var logger: os.Logger { os.Logger(os.OSLog.disabled) }
             """,
         ]
     }
@@ -174,7 +176,7 @@ private func buildHandleMembers(
     \(raw: availability)
     \(raw: accessPrefix)nonisolated static var logger: os.Logger {
         guard \(raw: condition) else {
-            return .disabled
+            return os.Logger(os.OSLog.disabled)
         }
         return \(raw: liveLoggerExpression)
     }
@@ -210,7 +212,7 @@ private func buildCategoryAccessorMembers(
             """
             \(raw: availability)
             \(raw: accessPrefix)nonisolated static func logger(for category: OSToolbox.LogCategory) -> os.Logger {
-                .disabled
+                os.Logger(os.OSLog.disabled)
             }
             """,
         ]
@@ -229,7 +231,7 @@ private func buildCategoryAccessorMembers(
         \(raw: availability)
         \(raw: accessPrefix)nonisolated static func logger(for category: OSToolbox.LogCategory) -> os.Logger {
             guard \(raw: condition) else {
-                return .disabled
+                return os.Logger(os.OSLog.disabled)
             }
             return LoggableMacro._sharedLogger(subsystem: subsystem, category: category.name)
         }

@@ -51,6 +51,16 @@ struct RuntimeControlledService {}
 @Loggable(.internal, isEnabled: false)
 struct StaticallyDisabledService {}
 
+@Test func staticallyDisabledLoggersEvaluateNothing() {
+    var evaluationCount = 0
+
+    StaticallyDisabledService.logger.error("tracked=\({ evaluationCount += 1; return evaluationCount }())")
+    #expect(evaluationCount == 0)
+
+    StaticallyDisabledService.logger(for: .probeCategory).error("tracked=\({ evaluationCount += 1; return evaluationCount }())")
+    #expect(evaluationCount == 0)
+}
+
 @Loggable(.internal)
 struct GenericRuntimeControlledService<Element> {}
 

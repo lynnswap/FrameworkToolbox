@@ -36,6 +36,11 @@ import PointerAuthenticationSupport
 /// interposing a libSystem function realistically only redirects calls made
 /// from images you built yourself.
 ///
+/// The operating system must also allow the slot's pages to become writable.
+/// Trusted Path Read-Only (TPRO) pages, including protected `__DATA_CONST`
+/// pages, reject that change. Such slots remain unchanged and are reported as
+/// ``DyldDynamicInterposeReport/SkippedSlot/Reason/memoryProtectionChangeFailed(errorNumber:)``.
+///
 /// ## Concurrency
 ///
 /// Each slot is a naturally aligned, pointer-sized store, so a thread calling

@@ -37,8 +37,10 @@ struct DyldDynamicInterposeTests {
 
     /// The whole apply/observe/revert cycle lives in a single test so no other
     /// test can observe the process while `getppid` is redirected.
-    @Test("applying rewrites the symbol pointer slot, reverting puts it back")
-    func applyRedirectsCallsAndRevertRestoresThem() {
+    @Test("applying and reverting redirects calls or reports the slot's TPRO denial")
+    func applyRedirectsCallsAndRevertRestoresThem() throws {
+        let requiresWritableTestImage = getenv("FRAMEWORK_TOOLBOX_REQUIRE_INTERPOSE_WRITES")
+            .map { String(cString: $0) == "1" } ?? false
         let realParentProcessIdentifier = getppid()
         #expect(realParentProcessIdentifier != interposedParentProcessIdentifier)
 
@@ -55,6 +57,26 @@ struct DyldDynamicInterposeTests {
             to: .image(#dsohandle),
             excludingDeclaringImage: false
         )
+        defer { #expect(DyldDynamicInterpose.revertAll().skippedSlots.isEmpty) }
+
+        // TPRO-protected GOT pages reject mprotect even when their maximum
+        // protection includes writing. Only that observed restriction is an
+        // expected failure; other permission errors must still fail this test.
+        if !requiresWritableTestImage,
+           !applyReport.skippedSlots.isEmpty,
+           try applyReport.skippedSlots.allSatisfy({ slot in
+               guard slot.reason == .memoryProtectionChangeFailed(errorNumber: EACCES) else {
+                   return false
+               }
+               let region = try leafVMRegion(containing: slot.slotAddress)
+               return region.flags & UInt16(VM_REGION_FLAG_TPRO_ENABLED) != 0
+           }) {
+            #expect(applyReport.rewrittenSlots.isEmpty)
+            #expect(getppid() == realParentProcessIdentifier)
+            #expect(DyldDynamicInterpose.revertAll().isEmpty)
+            return
+        }
+
         #expect(applyReport.skippedSlots.isEmpty)
         #expect(!applyReport.rewrittenSlots.isEmpty, "no symbol pointer slot matched getppid")
         #expect(getppid() == interposedParentProcessIdentifier)

@@ -1,20 +1,20 @@
-name: Logging tests
+name: Maintenance tests
 
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, codex/0.13-maintenance]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: logging-tests-${{ github.ref }}
+  group: maintenance-tests-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  logging-tests:
+  maintenance-tests:
     runs-on: macos-26
     timeout-minutes: 30
     env:
@@ -37,10 +37,14 @@ jobs:
           tar -xzf "$archive" -C "$tool_directory"
           echo "$tool_directory" >> "$GITHUB_PATH"
 
-      - name: Test logging macros and disabled interpolation
+      - name: Test default package behavior
         run: |
           swift --version
-          swift test --filter 'OSToolboxMacroTests|LoggingControlTests|DisabledLoggingSkipsInterpolationTests|staticallyDisabledLoggersEvaluateNothing' 2>&1 | xcsift -f github-actions
+          swift test 2>&1 | xcsift -f github-actions
+
+      - name: Test interposition with writable test-image slots
+        run: |
+          FRAMEWORK_TOOLBOX_REQUIRE_INTERPOSE_WRITES=1 swift test --filter DyldDynamicInterposeTests -Xlinker -no_data_const 2>&1 | xcsift -f github-actions
 
       - name: Check disabled logger imports
         run: |
